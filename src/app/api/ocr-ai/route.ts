@@ -1,138 +1,136 @@
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 
+// Configurar timeout maior para a rota
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     const body = await request.json();
     const { imageBase64, mimeType } = body;
 
-    console.log("=== Requisição OCR recebida ===");
-    console.log("Tamanho da imagem (base64):", imageBase64?.length || 0);
+    console.log("=== OCR API ===");
+    console.log("ImageBase64 length:", imageBase64?.length || 0);
     console.log("MimeType:", mimeType);
 
     if (!imageBase64) {
-      console.log("ERRO: Imagem não fornecida");
       return NextResponse.json({
         success: false,
-        text: "",
         error: "Imagem é obrigatória"
       }, { status: 400 });
     }
 
-    console.log("=== Iniciando OCR com IA Vision ===");
-    const startTime = Date.now();
-
-    try {
-      const zai = await ZAI.create();
-      console.log("ZAI criado com sucesso");
-
-      const imageUrl = `data:${mimeType || "image/jpeg"};base64,${imageBase64}`;
-      console.log("Image URL preparada, tamanho:", imageUrl.length);
-
-      console.log("Chamando createVision...");
-      const response = await zai.chat.completions.createVision({
-        model: 'glm-4v-flash',
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analise esta imagem de um display de máquina de jogos.
-
-PROCURE E EXTRAIA OS VALORES NUMÉRICOS:
-
-1. Campo "ENTRADA DE FICHA" - valor numérico que aparece junto a este texto
-2. Campo "SALIDA CON LLAVE" - valor numérico que aparece junto a este texto
-
-Responda APENAS em formato JSON:
-{"totalEntradas": "numero", "totalSaidas": "numero"}
-
-Se não encontrar um valor, use null.`,
-              },
-              {
-                type: "image_url",
-                image_url: { url: imageUrl },
-              },
-            ],
-          },
-        ],
-      });
-
-      const endTime = Date.now();
-      const processingTime = (endTime - startTime) / 1000;
-      console.log(`OCR concluído em ${processingTime.toFixed(2)}s`);
-
-      console.log("Response completa:", JSON.stringify(response, null, 2).substring(0, 500));
-
-      const rawContent = response.choices?.[0]?.message?.content || "";
-      console.log("Resposta da IA:", rawContent);
-
-      if (!rawContent) {
-        console.log("ERRO: Resposta vazia da IA");
-        return NextResponse.json({
-          success: false,
-          text: "",
-          error: "IA retornou resposta vazia",
-          processingTime,
-        });
-      }
-
-      let totalEntradas: string | undefined;
-      let totalSaidas: string | undefined;
-      
-      try {
-        let cleanContent = rawContent
-          .replace(/```json\s*/gi, '')
-          .replace(/```\s*/gi, '')
-          .trim();
-        
-        console.log("Conteúdo limpo:", cleanContent);
-        
-        const jsonMatch = cleanContent.match(/\{[\s\S]*?\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          console.log("JSON parseado:", parsed);
-          
-          totalEntradas = parsed.totalEntradas || undefined;
-          totalSaidas = parsed.totalSaidas || undefined;
-          
-          if (totalEntradas === null || totalEntradas === "null") totalEntradas = undefined;
-          if (totalSaidas === null || totalSaidas === "null") totalSaidas = undefined;
-          
-          console.log("Extraído:", { totalEntradas, totalSaidas });
-        } else {
-          console.log("Nenhum JSON encontrado na resposta");
-        }
-      } catch (parseError) {
-        console.error("Erro ao fazer parse do JSON:", parseError);
-      }
-
-      return NextResponse.json({
-        success: true,
-        text: rawContent,
-        totalEntradas,
-        totalSaidas,
-        processingTime,
-      });
-
-    } catch (aiError) {
-      console.error("ERRO NA IA:", aiError);
+    // Verificar tamanho da imagem (máximo 5MB em base64 = ~3.7MB de imagem)
+    const imageSizeMB = (imageBase64.length * 0.75) / (1024 * 1024);
+    console.log("Tamanho da imagem:", imageSizeMB.toFixed(2), "MB");
+    
+    if (imageSizeMB > 5) {
       return NextResponse.json({
         success: false,
-        text: "",
-        error: "Erro na IA: " + (aiError instanceof Error ? aiError.message : String(aiError)),
-        details: aiError instanceof Error ? aiError.stack : undefined,
+        error: `Imagem muito grande (${imageSizeMB.toFixed(1)}MB). Máximo: 5MB`
+      }, { status: 400 });
+    }
+
+    console.log("Criando cliente ZAI...");
+    const zai = await ZAI.create();
+    console.log("ZAI criado");
+
+    const imageUrl = `data:${mimeType || "image/jpeg"};base64,${imageBase64}`;
+
+    console.log("Enviando para IA Vision...");
+    
+    const response = await zai.chat.completions.createVision({
+      model: 'glm-4v-flash',
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Você é um especialista em ler displays de máquinas de jogos.
+
+Analise esta foto de um display digital e extraia:
+
+1. ENTRADA DE FICHA - O valor numérico que aparece junto a este texto
+2. SALIDA CON LLAVE - O valor numérico que aparece junto a este texto
+
+IMPORTANTE:
+- Procure cuidadosamente pelos textos exatos "ENTRADA DE FICHA" e "SALIDA CON LLAVE"
+- Extraia apenas os números associados a cada campo
+- Se não encontrar, retorne null
+
+Responda APENAS com JSON válido, sem texto adicional:
+{"totalEntradas": valor_ou_null, "totalSaidas": valor_ou_null}`,
+            },
+            {
+              type: "image_url",
+              image_url: { url: imageUrl },
+            },
+          ],
+        },
+      ],
+    });
+
+    const processingTime = (Date.now() - startTime) / 1000;
+    console.log(`IA respondeu em ${processingTime.toFixed(2)}s`);
+
+    const rawContent = response.choices?.[0]?.message?.content || "";
+    console.log("Resposta da IA:", rawContent.substring(0, 200));
+
+    if (!rawContent) {
+      return NextResponse.json({
+        success: false,
+        error: "IA não retornou resposta",
+        processingTime,
       });
     }
 
+    // Parsear resposta
+    let totalEntradas: string | undefined;
+    let totalSaidas: string | undefined;
+    
+    try {
+      let cleanContent = rawContent
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim();
+      
+      const jsonMatch = cleanContent.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        totalEntradas = parsed.totalEntradas != null ? String(parsed.totalEntradas) : undefined;
+        totalSaidas = parsed.totalSaidas != null ? String(parsed.totalSaidas) : undefined;
+      }
+    } catch (parseError) {
+      console.log("Erro no parse, tentando extrair números diretamente");
+      // Tentar extrair números da resposta
+      const numbers = rawContent.match(/\d+[\.,]?\d*/g);
+      if (numbers && numbers.length >= 2) {
+        totalEntradas = numbers[0];
+        totalSaidas = numbers[1];
+      }
+    }
+
+    console.log("Valores extraídos:", { totalEntradas, totalSaidas });
+
+    return NextResponse.json({
+      success: true,
+      text: rawContent,
+      totalEntradas,
+      totalSaidas,
+      processingTime,
+    });
+
   } catch (error) {
-    console.error("ERRO GERAL OCR:", error);
+    const processingTime = (Date.now() - startTime) / 1000;
+    console.error("ERRO OCR:", error);
+    
     return NextResponse.json({
       success: false,
-      text: "",
-      error: "Erro ao processar",
-      details: error instanceof Error ? error.message : String(error),
-    });
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+      processingTime,
+    }, { status: 500 });
   }
 }

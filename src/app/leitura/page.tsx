@@ -249,6 +249,34 @@ export default function LeituraPage() {
     }
   }, [])
 
+  // Função para comprimir imagem
+  const compressImage = useCallback((dataUrl: string, maxWidth: number = 1280, quality: number = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+        
+        // Redimensionar se necessário
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+        
+        canvas.width = width
+        canvas.height = height
+        
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = reject
+      img.src = dataUrl
+    })
+  }, [])
+
   const processWithAI = useCallback(async () => {
     if (!image) return
     
@@ -256,9 +284,15 @@ export default function LeituraPage() {
     const startTime = Date.now()
     
     try {
-      const base64Data = image.split(',')[1]
-      const mimeType = image.split(';')[0].split(':')[1]
+      // Comprimir imagem antes de enviar
+      console.log('Comprimindo imagem...')
+      const compressedImage = await compressImage(image)
+      console.log('Imagem comprimida, tamanho:', compressedImage.length)
       
+      const base64Data = compressedImage.split(',')[1]
+      const mimeType = compressedImage.split(';')[0].split(':')[1]
+      
+      console.log('Enviando para API OCR...')
       const response = await fetch('/api/ocr-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -269,6 +303,7 @@ export default function LeituraPage() {
       })
       
       const data = await response.json()
+      console.log('Resposta da API:', data)
       const endTime = Date.now()
       const processingTime = (endTime - startTime) / 1000
       
@@ -277,19 +312,22 @@ export default function LeituraPage() {
           text: data.text || '',
           totalEntradas: data.totalEntradas,
           totalSaidas: data.totalSaidas,
-          processingTime,
+          processingTime: data.processingTime || processingTime,
         })
       } else {
+        console.error('Erro retornado pela API:', data.error)
+        alert('Erro: ' + (data.error || 'Erro desconhecido'))
         setOcrResult({ text: '', processingTime })
       }
     } catch (error) {
       console.error('Erro na API de IA:', error)
+      alert('Erro de conexão: ' + (error instanceof Error ? error.message : String(error)))
       const endTime = Date.now()
       setOcrResult({ text: '', processingTime: (endTime - startTime) / 1000 })
     } finally {
       setIsLoading(false)
     }
-  }, [image])
+  }, [image, compressImage])
 
   const novaFoto = useCallback(() => {
     setImage(null)
