@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Lock, User, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { Lock, User, Loader2, AlertCircle, Eye, EyeOff, SkipForward } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,14 +23,12 @@ export default function LoginPage() {
 
   // Verificar login e carregar credenciais salvas
   useEffect(() => {
-    // Verificar se já está logado
     const usuarioLogado = localStorage.getItem('usuario_logado')
     if (usuarioLogado) {
       router.push('/dashboard')
       return
     }
 
-    // Carregar credenciais salvas
     const credenciaisSalvas = localStorage.getItem('credenciais_usuario')
     if (credenciaisSalvas) {
       try {
@@ -61,10 +59,8 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Salvar sessão
         localStorage.setItem('usuario_logado', JSON.stringify(data.usuario))
 
-        // Salvar/limpar credenciais
         if (salvarCredenciais) {
           localStorage.setItem('credenciais_usuario', JSON.stringify({ nome, senha }))
         } else {
@@ -116,7 +112,6 @@ export default function LoginPage() {
       if (data.usuario) {
         setMostrarCadastro(false)
         setError('')
-        // Fazer login automaticamente
         handleLogin(e)
       } else {
         setError(data.error || 'Erro ao criar usuário')
@@ -126,6 +121,18 @@ export default function LoginPage() {
       setError('Erro de conexão')
       setIsLoading(false)
     }
+  }
+
+  // Pular login - criar usuário temporário
+  const handlePular = () => {
+    const usuarioTemporario = {
+      id: 'temp-' + Date.now(),
+      nome: 'Visitante',
+      nivel: 'ADMINISTRADOR',
+      nomeCompleto: 'Visitante',
+    }
+    localStorage.setItem('usuario_logado', JSON.stringify(usuarioTemporario))
+    router.push('/dashboard')
   }
 
   if (isChecking) {
@@ -242,6 +249,19 @@ export default function LoginPage() {
               {mostrarCadastro ? 'Criar Administrador' : 'Entrar'}
             </Button>
           </form>
+
+          {/* Botão Pular */}
+          {!mostrarCadastro && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full mt-3" 
+              onClick={handlePular}
+            >
+              <SkipForward className="w-4 h-4 mr-2" />
+              Pular
+            </Button>
+          )}
         </CardContent>
       </Card>
     </main>
