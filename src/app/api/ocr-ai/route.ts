@@ -31,17 +31,19 @@ export async function POST(request: NextRequest) {
               type: "text",
               text: `Você é um especialista em extrair dados de displays de máquinas de jogos.
 
-Analise esta imagem com MUITA ATENÇÃO e encontre:
+Analise esta imagem com MUITA ATENÇÃO e encontre os valores numéricos nos campos:
 
-1. **TOTAL ENTRADAS**: Procure por:
-   - "ENTRADA", "ENTRADAS", "IN", "TOTAL IN", "CREDIT", "CRÉDITO"
-   - Valores numéricos que representem entradas
+1. **ENTRADA DE FICHA** - Procure por este texto exato no display e extraia o valor numérico associado (pode estar logo abaixo ou ao lado).
 
-2. **TOTAL SAÍDAS**: Procure por:
-   - "SAÍDA", "SAÍDAS", "OUT", "TOTAL OUT", "DÉBITO"
-   - Valores numéricos que representem saídas
+2. **SALIDA CON LLAVE** - Procure por este texto exato no display e extraia o valor numérico associado (pode estar logo abaixo ou ao lado).
 
-Responda APENAS com JSON (sem markdown):
+INSTRUÇÕES IMPORTANTES:
+- Os textos estão em espanhol: "ENTRADA DE FICHA" e "SALIDA CON LLAVE"
+- Extraia APENAS os números, incluindo pontos ou vírgulas decimais se houver
+- Se não encontrar algum valor, retorne null para esse campo
+- Não invente valores - apenas extraia o que estiver visível na imagem
+
+Responda APENAS com JSON válido (sem markdown, sem explicações):
 {"totalEntradas": "valor ou null", "totalSaidas": "valor ou null"}`,
             },
             {
@@ -51,7 +53,6 @@ Responda APENAS com JSON (sem markdown):
           ],
         },
       ],
-      thinking: { type: 'disabled' },
     });
 
     const endTime = Date.now();
