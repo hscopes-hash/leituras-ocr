@@ -18,10 +18,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(true)
   const [error, setError] = useState('')
-  const [mostrarCadastro, setMostrarCadastro] = useState(false)
-  const [confirmaSenha, setConfirmaSenha] = useState('')
 
-  // Verificar login e carregar credenciais salvas
   useEffect(() => {
     const usuarioLogado = localStorage.getItem('usuario_logado')
     if (usuarioLogado) {
@@ -78,52 +75,6 @@ export default function LoginPage() {
     }
   }
 
-  const handleCadastroAdmin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    if (senha !== confirmaSenha) {
-      setError('As senhas não conferem')
-      return
-    }
-
-    if (senha.length < 4) {
-      setError('A senha deve ter pelo menos 4 caracteres')
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      const response = await fetch('/api/usuarios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome,
-          senha,
-          nivel: 'ADMINISTRADOR',
-          nomeCompleto: 'Administrador',
-          ativo: true,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.usuario) {
-        setMostrarCadastro(false)
-        setError('')
-        handleLogin(e)
-      } else {
-        setError(data.error || 'Erro ao criar usuário')
-        setIsLoading(false)
-      }
-    } catch {
-      setError('Erro de conexão')
-      setIsLoading(false)
-    }
-  }
-
-  // Pular login - criar usuário temporário
   const handlePular = () => {
     const usuarioTemporario = {
       id: 'temp-' + Date.now(),
@@ -150,17 +101,11 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center">
             <Lock className="w-8 h-8 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">
-            {mostrarCadastro ? 'Primeiro Acesso' : 'Login'}
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {mostrarCadastro 
-              ? 'Crie o usuário administrador' 
-              : 'Sistema de Leituras'}
-          </p>
+          <CardTitle className="text-2xl">Login</CardTitle>
+          <p className="text-sm text-muted-foreground">Sistema de Leituras</p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={mostrarCadastro ? handleCadastroAdmin : handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="nome">Nome de Usuário</Label>
               <div className="relative">
@@ -202,36 +147,16 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {mostrarCadastro && (
-              <div className="space-y-2">
-                <Label htmlFor="confirmaSenha">Confirmar Senha</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="confirmaSenha"
-                    type="password"
-                    placeholder="Confirme a senha"
-                    value={confirmaSenha}
-                    onChange={(e) => setConfirmaSenha(e.target.value)}
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {!mostrarCadastro && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="salvar"
-                  checked={salvarCredenciais}
-                  onCheckedChange={(checked) => setSalvarCredenciais(checked === true)}
-                />
-                <Label htmlFor="salvar" className="text-sm cursor-pointer">
-                  Salvar credenciais
-                </Label>
-              </div>
-            )}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="salvar"
+                checked={salvarCredenciais}
+                onCheckedChange={(checked) => setSalvarCredenciais(checked === true)}
+              />
+              <Label htmlFor="salvar" className="text-sm cursor-pointer">
+                Salvar credenciais
+              </Label>
+            </div>
 
             {error && (
               <div className="flex items-center gap-2 text-red-500 text-sm">
@@ -246,22 +171,20 @@ export default function LoginPage() {
               ) : (
                 <Lock className="w-4 h-4 mr-2" />
               )}
-              {mostrarCadastro ? 'Criar Administrador' : 'Entrar'}
+              Entrar
             </Button>
-          </form>
 
-          {/* Botão Pular */}
-          {!mostrarCadastro && (
+            {/* Botão Pular */}
             <Button 
               type="button" 
               variant="outline" 
-              className="w-full mt-3" 
+              className="w-full" 
               onClick={handlePular}
             >
               <SkipForward className="w-4 h-4 mr-2" />
               Pular
             </Button>
-          )}
+          </form>
         </CardContent>
       </Card>
     </main>
