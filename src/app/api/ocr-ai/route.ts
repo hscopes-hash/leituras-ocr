@@ -1,131 +1,103 @@
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 
-interface OCRResponse {
-  success: boolean;
-  text: string;
-  totalEntradas?: string;
-  totalSaidas?: string;
-  error?: string;
-  details?: string;
-}
-
-export async function POST(request: NextRequest): Promise<NextResponse<OCRResponse>> {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { imageBase64, mimeType } = body;
 
     if (!imageBase64) {
-      return NextResponse.json(
-        { success: false, error: "Imagem é obrigatória" },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: false,
+        text: "",
+        error: "Imagem é obrigatória"
+      }, { status: 400 });
     }
+
+    console.log("=== Iniciando OCR com IA Vision ===");
+    const startTime = Date.now();
 
     const zai = await ZAI.create();
 
+    const imageUrl = `data:${mimeType || "image/jpeg"};base64,${imageBase64}`;
+
     const response = await zai.chat.completions.createVision({
+      model: 'glm-4.6v',
       messages: [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `Você é um sistema de OCR de alta precisão. Sua tarefa é extrair TODO o texto da imagem com FIDELIDADE MÁXIMA.
+              text: `Você é um especialista em extrair dados de displays de máquinas de jogos.
 
-REGRAS OBRIGATÓRIAS:
+Analise esta imagem com MUITA ATENÇÃO e encontre:
 
-1. **FIDELIDADE ABSOLUTA**: Transcreva exatamente o que está escrito, incluindo:
-   - Todos os caracteres, pontuações e símbolos
-   - Maiúsculas e minúsculas exatamente como aparecem
-   - Números, valores monetários e unidades de medida
-   - Caracteres especiais (®, ™, ©, etc.)
+1. **TOTAL ENTRADAS**: Procure por:
+   - "ENTRADA", "ENTRADAS", "IN", "TOTAL IN", "CREDIT", "CRÉDITO"
+   - Valores numéricos que representem entradas
 
-2. **PRESERVAÇÃO DE LAYOUT**:
-   - Mantenha a estrutura de linhas e colunas da imagem
-   - Use quebras de linha (Enter) para separar linhas visuais
-   - Para tabelas: use ESPAÇOS ou TABULAÇÃO para alinhar colunas
-   - Preserve a ordem de leitura (esquerda para direita, cima para baixo)
+2. **TOTAL SAÍDAS**: Procure por:
+   - "SAÍDA", "SAÍDAS", "OUT", "TOTAL OUT", "DÉBITO"
+   - Valores numéricos que representem saídas
 
-3. **TABELAS E DADOS TABULARES**:
-   - Identifique tabelas e preserve-as em formato tabular
-   - Alinhe colunas com espaçamento consistente
-   - Mantenha cabeçalhos claramente separados dos dados
-   - Se houver grades/linhas, represente a estrutura visual
-
-4. **NÃO ADICIONE NADA**:
-   - Não faça comentários, explicações ou interpretações
-   - Não adicione texto que não esteja na imagem
-   - Não corrija erros de ortografia da imagem
-   - Não formate além do necessário para preservar o layout
-
-5. **TEXTO ILEGÍVEL**:
-   - Se houver texto parcialmente legível, transcreva o que for possível
-   - Use [?] apenas para caracteres completamente ilegíveis
-   - Nunca invente ou assuma conteúdo
-
-Após extrair o texto, identifique e retorne também:
-- TOTAL ENTRADAS: o valor numérico encontrado (se houver)
-- TOTAL SAÍDAS: o valor numérico encontrado (se houver)
-
-Responda EXATAMENTE no seguinte formato JSON:
-{
-  "texto": "texto completo extraído",
-  "totalEntradas": "valor ou null",
-  "totalSaidas": "valor ou null"
-}
-
-Retorne APENAS o JSON, sem nenhum comentário adicional.`,
+Responda APENAS com JSON (sem markdown):
+{"totalEntradas": "valor ou null", "totalSaidas": "valor ou null"}`,
             },
             {
               type: "image_url",
-              image_url: {
-                url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}`,
-              },
+              image_url: { url: imageUrl },
             },
           ],
         },
       ],
-      thinking: { type: "disabled" },
+      thinking: { type: 'disabled' },
     });
 
-    const rawContent = response.choices[0]?.message?.content || "";
-    
-    // Parse da resposta JSON
-    let extractedText = "";
+    const endTime = Date.now();
+    const processingTime = (endTime - startTime) / 1000;
+    console.log(`OCR concluído em ${processingTime.toFixed(2)}s`);
+
+    const rawContent = response.choices?.[0]?.message?.content || "";
+    console.log("Resposta da IA:", rawContent.substring(0, 300));
+
     let totalEntradas: string | undefined;
     let totalSaidas: string | undefined;
     
     try {
-      // Tentar extrair JSON da resposta
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      let cleanContent = rawContent
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim();
+      
+      const jsonMatch = cleanContent.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        extractedText = parsed.texto || parsed.texto || rawContent;
         totalEntradas = parsed.totalEntradas || undefined;
         totalSaidas = parsed.totalSaidas || undefined;
-      } else {
-        extractedText = rawContent;
+        
+        if (totalEntradas === null || totalEntradas === "null") totalEntradas = undefined;
+        if (totalSaidas === null || totalSaidas === "null") totalSaidas = undefined;
+        
+        console.log("Extraído:", { totalEntradas, totalSaidas });
       }
-    } catch {
-      extractedText = rawContent;
+    } catch (parseError) {
+      console.error("Erro parse:", parseError);
     }
 
     return NextResponse.json({
       success: true,
-      text: extractedText,
+      text: rawContent,
       totalEntradas,
       totalSaidas,
     });
   } catch (error) {
-    console.error("Erro no OCR com IA:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Erro ao processar imagem com IA",
-        details: error instanceof Error ? error.message : "Erro desconhecido",
-      },
-      { status: 500 }
-    );
+    console.error("ERRO OCR:", error);
+    return NextResponse.json({
+      success: false,
+      text: "",
+      error: "Erro ao processar",
+      details: error instanceof Error ? error.message : "Erro",
+    });
   }
 }
