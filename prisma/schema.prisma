@@ -1,0 +1,97 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USUÁRIOS ====================
+model Usuario {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  nome        String   @unique
+  senha       String
+  nivel       String   @default("OPERADOR") // ADMINISTRADOR, OPERADOR, SUPERVISOR
+  nomeCompleto String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  leituras    Leitura[]
+}
+
+// ==================== TIPOS DE MÁQUINA ====================
+model TipoMaquina {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  codigo       Int      @unique
+  descricao    String
+  campoEntrada String   @default("ENTRADA")
+  campoSaida   String   @default("SAIDA")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  maquinas     Maquina[]
+}
+
+// ==================== MÁQUINAS ====================
+model Maquina {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  codigo    Int      @unique
+  nome      String
+  tipoId    String   @db.ObjectId
+  entrada   Float    @default(0)
+  saida     Float    @default(0)
+  moeda     String   @default("R$")
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tipo      TipoMaquina @relation(fields: [tipoId], references: [id])
+  leituras  Leitura[]
+}
+
+// ==================== LOCAIS ====================
+model Local {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  codigo     Int      @unique
+  nome       String
+  adicional  String?
+  percentual Float    @default(0)
+  ativo      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  leituras   Leitura[]
+}
+
+// ==================== LEITURAS ====================
+model Leitura {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  usuarioId          String   @db.ObjectId
+  maquinaId          String   @db.ObjectId
+  localId            String?  @db.ObjectId
+  entrada            Float    @default(0)
+  saida              Float    @default(0)
+  imagem             String?
+  tempoProcessamento Float?
+  observacao         String?
+  dataLeitura        DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  usuario            Usuario   @relation(fields: [usuarioId], references: [id])
+  maquina            Maquina   @relation(fields: [maquinaId], references: [id])
+  local              Local?    @relation(fields: [localId], references: [id])
+}
+
+// ==================== CONFIGURAÇÕES ====================
+model Configuracao {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  chave     String   @unique
+  valor     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
